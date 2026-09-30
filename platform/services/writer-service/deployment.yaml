@@ -22,6 +22,11 @@ spec:
     metadata:
       labels:
         app: writer-service
+      annotations:
+        # Picked up by the Prometheus 'kubernetes-pods' scrape job.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: writer-service-sa
       containers:

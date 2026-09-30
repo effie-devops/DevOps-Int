@@ -1,0 +1,30 @@
+# Grafana on the shared django-api ALB at /grafana.
+# group.order 50 sits between the backend routes (10) and the frontend
+# catch-all "/" (100), so /grafana is evaluated before the catch-all.
+# NOTE: this exposes Grafana publicly over HTTP:80 with no auth in front of
+# the ALB (only Grafana's own login). Fine for UAT; front it with auth/TLS
+# or keep it internal (port-forward) for anything beyond UAT.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/group.name: django-api
+    alb.ingress.kubernetes.io/group.order: '50'
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
