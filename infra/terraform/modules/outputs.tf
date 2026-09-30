@@ -1,0 +1,95 @@
+# eks outputs
+output "eks_cluster_name" {
+  value = aws_eks_cluster.eks_cluster.name
+}
+
+output "eks_cluster_endpoint" {
+  value = aws_eks_cluster.eks_cluster.endpoint
+}
+
+output "eks_cluster_certificate_authority" {
+  value = aws_eks_cluster.eks_cluster.certificate_authority[0].data
+}
+
+output "eks_node_group_name" {
+  value = aws_eks_node_group.eks_node_group.node_group_name
+}
+
+output "alb_controller_role_arn" {
+  value = aws_iam_role.alb_controller_role.arn
+}
+
+# rds endpoint
+output "rds_endpoint" {
+  value = aws_db_instance.database_instance.endpoint
+}
+
+# website url (served directly via the ALB public DNS over HTTP)
+output "website_url" {
+  value = "http://${aws_lb.application_load_balancer.dns_name}"
+}
+
+# alb dns name
+output "alb_dns_name" {
+  value = aws_lb.application_load_balancer.dns_name
+}
+
+# ecr repository urls
+output "ecr_repository_reader_url" {
+  value = aws_ecr_repository.ecr_repository_reader.repository_url
+}
+
+output "ecr_repository_writer_url" {
+  value = aws_ecr_repository.ecr_repository_writer.repository_url
+}
+
+# cloudwatch log group name
+output "cloudwatch_log_group_name" {
+  value = aws_cloudwatch_log_group.eks_log_group.name
+}
+
+# cloudtrail arn
+output "cloudtrail_arn" {
+  value = aws_cloudtrail.main.arn
+}
+
+# vpc flow logs bucket name
+output "vpc_flow_logs_bucket_name" {
+  value = aws_s3_bucket.vpc_flow_logs_bucket.bucket
+}
+
+# vpc flow log id
+output "vpc_flow_log_id" {
+  value = aws_flow_log.vpc_flow_log.id
+}
+
+# secrets manager
+output "secrets_access_role_arn" {
+  value = aws_iam_role.secrets_access_role.arn
+}
+
+output "db_credentials_secret_arn" {
+  value = aws_secretsmanager_secret.db_credentials.arn
+}
+
+# github actions
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions_role.arn
+}
+
+# karpenter
+output "karpenter_controller_role_arn" {
+  value = aws_iam_role.karpenter_controller_role.arn
+}
+
+output "karpenter_node_role_arn" {
+  value = aws_iam_role.karpenter_node_role.arn
+}
+
+output "karpenter_instance_profile_name" {
+  value = aws_iam_instance_profile.karpenter_node.name
+}
+
+output "karpenter_interruption_queue_name" {
+  value = aws_sqs_queue.karpenter_interruption.name
+}
