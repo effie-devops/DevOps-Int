@@ -17,10 +17,6 @@ set -euo pipefail
 helm repo add secrets-store-csi-driver \
   https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts >/dev/null 2>&1 || true
 
-# 2) AWS provider for the driver.
-helm repo add aws-secrets-manager \
-  https://aws.github.io/secrets-store-csi-driver-provider-aws >/dev/null 2>&1 || true
-
 helm repo update >/dev/null
 
 # syncSecret.enabled=true is required so the driver creates the Kubernetes Secret
@@ -32,11 +28,20 @@ helm upgrade --install csi-secrets-store \
   --set syncSecret.enabled=true \
   --set enableSecretRotation=true
 
-helm upgrade --install secrets-provider-aws \
-  aws-secrets-manager/secrets-store-csi-driver-provider-aws \
-  --namespace kube-system
+# 2) AWS provider for the driver.
+#
+# NOTE: we intentionally install the AWS provider from its raw manifest rather
+# than its Helm chart. The provider Helm chart bundles the Secrets Store CSI
+# driver as a dependency and, by default, tries to own the shared
+# "secrets-store-csi-driver" ServiceAccount. Since we install the driver as its
+# own Helm release (csi-secrets-store) above, the chart install fails with a
+# Helm ownership/import error on that ServiceAccount. The manifest install has
+# no such conflict and matches how the provider is already deployed on-cluster.
+# kubectl apply is idempotent, so this is safe to re-run every deploy.
+kubectl apply -f \
+  https://raw.githubusercontent.com/aws/secrets-store-csi-driver-provider-aws/main/deployment/aws-provider-installer.yaml
 
 # Wait for the driver + provider daemonsets to be ready before workloads try to
 # mount CSI volumes, otherwise the first rollout can race the driver install.
 kubectl -n kube-system rollout status daemonset/csi-secrets-store-secrets-store-csi-driver --timeout=180s
-kubectl -n kube-system rollout status daemonset/secrets-provider-aws-secrets-store-csi-driver-provider-aws --timeout=180s
+kubectl -n kube-system rollout status daemonset/csi-secrets-store-provider-aws --timeout=180s
