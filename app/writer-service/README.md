@@ -1,3 +1,3 @@
 Reader service
 
-tbd x8
+tbd x2
