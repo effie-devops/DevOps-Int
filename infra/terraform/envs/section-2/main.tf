@@ -2,7 +2,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Latest Amazon Linux 2023 AMI for the EC2 instance
+# EC2 instance
 data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -18,9 +18,7 @@ data "aws_ami" "al2023" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # VPC
-# ---------------------------------------------------------------------------
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -31,9 +29,7 @@ resource "aws_vpc" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Subnets
-# ---------------------------------------------------------------------------
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_subnet_cidr
@@ -57,21 +53,7 @@ resource "aws_subnet" "private" {
   }
 }
 
-# Second private subnet in another AZ so the RDS DB subnet group is valid.
-resource "aws_subnet" "private_2" {
-  vpc_id            = aws_vpc.this.id
-  cidr_block        = var.private_subnet_cidr_2
-  availability_zone = data.aws_availability_zones.available.names[1]
-
-  tags = {
-    Name = "${var.project_name}-private-subnet-2"
-    Tier = "private"
-  }
-}
-
-# ---------------------------------------------------------------------------
 # Internet Gateway + public routing
-# ---------------------------------------------------------------------------
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 
@@ -98,7 +80,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private route table (no internet route by default; keeps the DB isolated)
+# Private route table
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
 
@@ -117,9 +99,7 @@ resource "aws_route_table_association" "private_2" {
   route_table_id = aws_route_table.private.id
 }
 
-# ---------------------------------------------------------------------------
 # Security groups
-# ---------------------------------------------------------------------------
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-ec2-sg"
   description = "Security group for the public EC2 instance"
@@ -180,9 +160,7 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # EC2 in the public subnet
-# ---------------------------------------------------------------------------
 resource "aws_instance" "public" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
@@ -196,9 +174,7 @@ resource "aws_instance" "public" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # RDS in the private subnets
-# ---------------------------------------------------------------------------
 resource "aws_db_subnet_group" "this" {
   name       = "${var.project_name}-db-subnet-group"
   subnet_ids = [aws_subnet.private.id, aws_subnet.private_2.id]

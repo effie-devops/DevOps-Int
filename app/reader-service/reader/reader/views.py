@@ -19,7 +19,7 @@ def getBooks(request):
     serializer = LibrarySerializer(books, many=True)
     return Response(serializer.data)
 
-#get a single book
+#get a single book from db
 @api_view(['GET'])
 def getBook(request, pk):
     book = Library.objects.get(id=pk)

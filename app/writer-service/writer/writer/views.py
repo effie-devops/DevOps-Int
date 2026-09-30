@@ -8,7 +8,7 @@ from rest_framework.decorators import api_view
 from .models import Library
 from .serializers import LibrarySerializer
 
-# Health check endpoint
+# Health check endpoint health
 def health_check(request):
     return JsonResponse({'status': 'healthy', 'service': 'writer'})
 
