@@ -58,10 +58,6 @@ spec:
                 secretKeyRef:
                   name: writer-service-db-secret
                   key: DB_PORT
-          volumeMounts:
-            - name: secrets-store
-              mountPath: "/mnt/secrets-store"
-              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -81,10 +77,3 @@ spec:
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 15
-      volumes:
-        - name: secrets-store
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: writer-service-secrets
