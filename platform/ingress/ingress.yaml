@@ -1,0 +1,68 @@
+# Two Ingress objects sharing a single ALB via alb.ingress.kubernetes.io/group.name.
+# An Ingress can only route to Services in its OWN namespace, so backend routes
+# live in the backend namespace and the frontend route in the ui namespace.
+# No DNS/ACM: exposed directly over the ALB public URL on HTTP:80.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: backend
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health/
+    alb.ingress.kubernetes.io/group.name: django-api
+    alb.ingress.kubernetes.io/group.order: '10'
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /reader
+            pathType: Prefix
+            backend:
+              service:
+                name: reader-service
+                port:
+                  number: 80
+          - path: /writer
+            pathType: Prefix
+            backend:
+              service:
+                name: writer-service
+                port:
+                  number: 80
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: reader-service
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ui-ingress
+  namespace: ui
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/group.name: django-api
+    # Higher order = lower priority, so the catch-all "/" is evaluated last.
+    alb.ingress.kubernetes.io/group.order: '100'
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
