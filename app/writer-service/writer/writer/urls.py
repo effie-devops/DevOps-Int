@@ -1,7 +1,9 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 urlpatterns = [
+    # Prometheus metrics endpoint (/metrics) provided by django-prometheus.
+    path('', include('django_prometheus.urls')),
     path('', views.health_check, name='health-check'),
     path('health/', views.health_check, name='health'),
     path('books/create/', views.createBook, name='create-book'),
