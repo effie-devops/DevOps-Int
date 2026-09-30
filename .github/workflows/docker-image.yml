@@ -1,0 +1,138 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/reader-service/**"
+      - "app/writer-service/**"
+      - "frontend/**"
+      - "platform/**"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy"
+        required: true
+        type: choice
+        options:
+          - reader-service
+          - writer-service
+          - frontend
+          - both
+          - all
+
+env:
+  AWS_REGION: eu-west-1
+  EKS_CLUSTER: django-api-uat-cluster
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.changes.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed services
+        id: changes
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ inputs.service }}" in
+              reader-service) echo 'services=["reader-service"]' >> $GITHUB_OUTPUT ;;
+              writer-service) echo 'services=["writer-service"]' >> $GITHUB_OUTPUT ;;
+              frontend)       echo 'services=["frontend"]' >> $GITHUB_OUTPUT ;;
+              both)           echo 'services=["reader-service","writer-service"]' >> $GITHUB_OUTPUT ;;
+              all)            echo 'services=["reader-service","writer-service","frontend"]' >> $GITHUB_OUTPUT ;;
+            esac
+          else
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              git diff --name-only HEAD~1 HEAD > changes.txt
+            else
+              git diff-tree --no-commit-id --name-only -r HEAD > changes.txt
+            fi
+            SERVICES="[]"
+            grep -q 'app/reader-service/' changes.txt && SERVICES=$(echo $SERVICES | jq -c '. + ["reader-service"]')
+            grep -q 'app/writer-service/' changes.txt && SERVICES=$(echo $SERVICES | jq -c '. + ["writer-service"]')
+            grep -q 'frontend/' changes.txt && SERVICES=$(echo $SERVICES | jq -c '. + ["frontend"]')
+            echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-deploy:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set service config
+        id: config
+        run: |
+          case "${{ matrix.service }}" in
+            reader-service)
+              echo "context=app" >> $GITHUB_OUTPUT
+              echo "dockerfile=app/reader-service/reader/Dockerfile" >> $GITHUB_OUTPUT
+              echo "ecr_name=reader-service" >> $GITHUB_OUTPUT
+              echo "namespace=backend" >> $GITHUB_OUTPUT
+              echo "manifest_dir=platform/services/reader-service" >> $GITHUB_OUTPUT
+              ;;
+            writer-service)
+              echo "context=app" >> $GITHUB_OUTPUT
+              echo "dockerfile=app/writer-service/writer/Dockerfile" >> $GITHUB_OUTPUT
+              echo "ecr_name=writer-service" >> $GITHUB_OUTPUT
+              echo "namespace=backend" >> $GITHUB_OUTPUT
+              echo "manifest_dir=platform/services/writer-service" >> $GITHUB_OUTPUT
+              ;;
+            frontend)
+              echo "context=frontend" >> $GITHUB_OUTPUT
+              echo "dockerfile=frontend/Dockerfile" >> $GITHUB_OUTPUT
+              echo "ecr_name=frontend-django" >> $GITHUB_OUTPUT
+              echo "namespace=ui" >> $GITHUB_OUTPUT
+              echo "manifest_dir=platform/services/frontend" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+        run: |
+          IMAGE=$ECR_REGISTRY/${{ steps.config.outputs.ecr_name }}
+          TAG=${GITHUB_SHA::7}
+          docker build -f ${{ steps.config.outputs.dockerfile }} -t $IMAGE:$TAG -t $IMAGE:latest ${{ steps.config.outputs.context }}
+          docker push $IMAGE:$TAG
+          docker push $IMAGE:latest
+
+      - name: Deploy to EKS
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          NS: ${{ steps.config.outputs.namespace }}
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+          # Ensure namespaces exist (backend / ui), then apply the manifests so
+          # the deploy works on a fresh cluster and stays in sync on updates.
+          kubectl apply -f platform/namespaces.yaml
+          kubectl apply -f ${{ steps.config.outputs.manifest_dir }}/
+
+          # Pin the freshly built image (SHA tag) over the manifest's :latest.
+          kubectl set image deployment/${{ matrix.service }} \
+            ${{ matrix.service }}=$ECR_REGISTRY/${{ steps.config.outputs.ecr_name }}:${GITHUB_SHA::7} \
+            --namespace "$NS"
+          kubectl rollout status deployment/${{ matrix.service }} --namespace "$NS" --timeout=120s

@@ -10,8 +10,10 @@ ENV PYTHONUNBUFFERED=1 \
 # Set work directory
 WORKDIR /app
 
-# Copy .env file to the container
-COPY .env .env
+# NOTE: DB config is injected at runtime as env vars from AWS Secrets Manager
+# via the Secrets Store CSI driver (see platform/services/*/secret-provider.yaml
+# and the deployment's secretKeyRef entries). We intentionally do NOT bake a
+# .env into the image so the real credentials never live in the image layers.
 
 # copy dependancies
 COPY requirements.txt .

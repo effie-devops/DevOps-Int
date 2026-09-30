@@ -162,6 +162,29 @@ resource "aws_iam_role" "github_actions_role" {
   })
 }
 
+# Grant the GitHub Actions role access to the cluster's Kubernetes API.
+# With authentication_mode = API_AND_CONFIG_MAP, kubectl calls from CI
+# (apply / set image / rollout status) are only authorized if the principal
+# has an EKS access entry mapped to a Kubernetes RBAC policy. Without this,
+# the pipeline's kubectl steps fail with "Unauthorized".
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name  = aws_eks_cluster.eks_cluster.name
+  principal_arn = aws_iam_role.github_actions_role.arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "github_actions_admin" {
+  cluster_name  = aws_eks_cluster.eks_cluster.name
+  principal_arn = aws_iam_role.github_actions_role.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.github_actions]
+}
+
 resource "aws_iam_role_policy" "github_actions_policy" {
   name = "${var.project_name}-${var.environment}-github-actions-policy"
   role = aws_iam_role.github_actions_role.id

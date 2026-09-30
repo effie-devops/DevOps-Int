@@ -68,3 +68,8 @@ output "karpenter_interruption_queue_name" {
   description = "SQS queue name for Karpenter spot interruption"
   value       = module.django_infrastructure.karpenter_interruption_queue_name
 }
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions OIDC (set as the AWS_ROLE_ARN repo secret/variable)"
+  value       = module.django_infrastructure.github_actions_role_arn
+}
