@@ -22,11 +22,18 @@ helm repo update >/dev/null
 # syncSecret.enabled=true is required so the driver creates the Kubernetes Secret
 # from the SecretProviderClass 'secretObjects' block (that is the object our
 # deployments consume via secretKeyRef). enableSecretRotation keeps it fresh.
+# tokenRequests[0].audience=sts.amazonaws.com is REQUIRED for the AWS provider:
+# it makes the driver's CSIDriver object request a bound ServiceAccount token
+# (audience sts.amazonaws.com) that kubelet passes to the provider. Without it
+# the mount fails with "serviceAccount.tokens not provided - ensure tokenRequests
+# is configured in CSIDriver" and pods hang in ContainerCreating. This is what
+# lets the provider do the IRSA exchange to call Secrets Manager.
 helm upgrade --install csi-secrets-store \
   secrets-store-csi-driver/secrets-store-csi-driver \
   --namespace kube-system \
   --set syncSecret.enabled=true \
-  --set enableSecretRotation=true
+  --set enableSecretRotation=true \
+  --set "tokenRequests[0].audience=sts.amazonaws.com"
 
 # 2) AWS provider for the driver.
 #
