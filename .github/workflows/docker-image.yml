@@ -126,6 +126,12 @@ jobs:
         run: |
           aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
 
+          # Ensure the Secrets Store CSI driver + AWS provider are installed. This
+          # is what syncs the DB credentials from Secrets Manager into the
+          # <service>-db-secret that the deployment consumes via secretKeyRef.
+          # Idempotent: no-ops when already installed.
+          ./platform/secrets-store-csi/install.sh
+
           # Ensure namespaces exist (backend / ui), then apply the manifests so
           # the deploy works on a fresh cluster and stays in sync on updates.
           kubectl apply -f platform/namespaces.yaml

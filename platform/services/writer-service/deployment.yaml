@@ -70,6 +70,13 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          # Mounting the CSI volume is what triggers the Secrets Store CSI driver
+          # to fetch from Secrets Manager and sync the K8s secret referenced by the
+          # secretKeyRef entries above (writer-service-db-secret).
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health/
@@ -82,3 +89,10 @@ spec:
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 15
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: writer-service-secrets
